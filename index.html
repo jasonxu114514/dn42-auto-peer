@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DN42 Peer 部署控制面板</title>
+
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background-color: #f4f4f9; }
+        .container { max-width: 600px; margin: auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); }
+        h1 { text-align: center; }
+        input, select { width: 100%; padding: 10px; margin-bottom: 15px; border-radius: 5px; border: 1px solid #ccc; }
+        button { width: 100%; padding: 12px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        #status { margin-top: 20px; padding: 15px; border-radius: 5px; }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>DN42 Peer 部署控制面板</h1>
+
+        <form id="deployForm">
+            <label>選擇節點</label>
+            <select id="nodeId" required>
+                {{range .}}
+                    <option value="{{.ID}}">{{.Name}}</option>
+                {{end}}
+            </select>
+
+            <label>ASN</label>
+            <input id="asn" required>
+
+            <label>IPv6 ULA ONLY!!!</label>
+            <input id="ipv6" required>
+
+            <label>WireGuard Endpoint</label>
+            <input id="endpoint" required>
+
+            <label>WireGuard Public Key</label>
+            <input id="pubkey" required>
+
+            <label>名稱</label>
+            <input id="name" required>
+
+            <button type="submit">配置 Peer</button>
+        </form>
+
+        <div id="status"></div>
+    </div>
+
+    <script>
+        document.getElementById("deployForm").addEventListener("submit", async (e) => {
+            e.preventDefault();
+
+            const status = document.getElementById("status");
+            status.textContent = "正在提交...";
+            status.className = "";
+
+            const payload = {
+                nodeId: nodeId.value,
+                asn: asn.value,
+                ipv6: ipv6.value,
+                endpoint: endpoint.value,
+                pubkey: pubkey.value,
+                name: name.value,
+            };
+
+            const resp = await fetch("/deploy", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await resp.json();
+
+            if (resp.ok) {
+                status.className = "success";
+                status.textContent = "創建成功：" + data.message;
+            } else {
+                status.className = "error";
+                status.textContent = "錯誤：" + (data.message ?? "未知錯誤");
+            }
+        });
+    </script>
+</body>
+</html>

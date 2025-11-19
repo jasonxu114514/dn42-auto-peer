@@ -4,23 +4,114 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DN42 Peer 部署控制面板</title>
-
     <style>
-        body { font-family: Arial, sans-serif; margin: 40px; background-color: #f4f4f9; }
-        .container { max-width: 600px; margin: auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); }
-        h1 { text-align: center; }
-        input, select { width: 100%; padding: 10px; margin-bottom: 15px; border-radius: 5px; border: 1px solid #ccc; }
-        button { width: 100%; padding: 12px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; }
-        #status { margin-top: 20px; padding: 15px; border-radius: 5px; }
-        .success { background: #d4edda; color: #155724; }
-        .error { background: #f8d7da; color: #721c24; }
+        body { font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif; margin: 40px; background-color: #f4f4f9; color: #333; }
+        .container { max-width: 600px; margin: auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1); }
+        h1 { text-align: center; color: #2c3e50; margin-bottom: 30px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; margin-top: 15px;}
+        input, select { width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #ccc; box-sizing: border-box; }
+        
+        /* 按鈕樣式 */
+        button.deploy-btn { width: 100%; padding: 12px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; margin-top: 20px; transition: 0.3s; }
+        button.deploy-btn:disabled { background: #ccc; cursor: not-allowed; }
+        button.deploy-btn:hover:not(:disabled) { background: #218838; }
+
+        /* 驗證區塊樣式 */
+        .auth-box { text-align: center; padding: 20px; background: #eef2f5; border-radius: 8px; margin-bottom: 20px; border: 1px solid #dde2e6; }
+        .verified-badge { display: inline-block; padding: 6px 12px; background: #007bff; color: white; border-radius: 20px; font-size: 0.9rem; font-weight: bold; }
+        .hidden { display: none; }
+        
+        #status { margin-top: 20px; padding: 15px; border-radius: 5px; display: none; }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
     </style>
+
+    <script>
+        class KioubitAuthButton extends HTMLElement {
+            #_shadow;
+            constructor() {
+                super();
+                this.#_shadow = this.attachShadow({ mode: 'closed' });
+            }
+
+            static #styles = '.kioubit-btn-dark,.kioubit-btn-light{font-weight:400;font-size:1rem;line-height:1.5;padding:.5em;display:flex;transition:color .15s ease-in-out,background-color .15s ease-in-out,border-color .15s ease-in-out,box-shadow .15s ease-in-out; cursor:pointer; justify-content:center; width:100%; box-sizing:border-box;}.kioubit-btn-dark{color:#fff;background-color:#343a40;vertical-align:middle;border:1px solid transparent;border-radius:.4rem;align-items:center}.kioubit-btn-dark:hover{color:#fff;background-color:#651fff;border-color:#1d2124}.kioubit-btn-dark:focus,.kioubit-btn-light:focus{outline:0;box-shadow:0 0 0 .2rem rgba(82,88,93,.5)}.kioubit-btn-light{color:#fafafa;background-color:#2962ff;border:1px solid transparent;border-radius:.4rem;align-items:center}.kioubit-btn-light:hover{color:#fff;background-color:#311b92;border-color:#1d2124}.kioubit-btn-logo{margin-right:.5em;}';
+            static #svgBase64 = btoa('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -64 1024 1024"><path d="M375.899 935.372C149.064 861.488 15.555 660.577 28.517 410.41 37.59 225.053 133.509 77.286 295.535-1.782c80.365-40.182 95.919-42.775 216.466-42.775 116.658 0 136.101 3.889 197.023 36.294C899.566 91.545 994.189 262.643 982.523 485.59c-9.073 185.357-104.992 333.124-267.018 412.192-73.884 37.59-101.104 42.775-197.023 45.367-60.922 1.296-124.435-1.296-142.582-7.777zm268.314-124.435c67.403-28.516 167.21-129.62 198.319-203.504 40.182-93.327 40.182-226.835 1.296-314.977-60.922-138.694-198.319-230.724-344.79-230.724-97.215 0-156.841 24.628-238.501 101.104-84.253 79.068-120.547 164.618-121.843 285.165-1.296 270.906 264.425 462.744 505.519 362.937zM311.089 448V156.354h89.438l7.777 256.648 107.585-128.324c102.4-123.139 108.881-128.324 158.137-128.324 28.516 0 51.848 2.592 51.848 5.185 0 3.889-58.329 72.587-128.324 152.952L469.226 460.962l98.511 110.177c54.441 60.922 110.177 123.139 124.435 139.99l24.628 28.516h-50.552c-49.256 0-55.737-6.481-154.248-121.843L408.304 494.663l-3.889 123.139-3.889 121.843h-89.438V447.999z" fill="#ffffff"/></svg>');
+
+            connectedCallback() {
+                this.render();
+            }
+
+            static get observedAttributes() {
+                return ['return', 'token'];
+            }
+
+            attributeChangedCallback(name, oldValue, newValue) {
+                if (oldValue === newValue) return;
+                switch (name) {
+                    case 'return':
+                        const returnInput = this.#_shadow.querySelector('input[name="return"]');
+                        returnInput && (returnInput.value = this.getReturnUrl());
+                        break;
+                    case 'token':
+                        const tokenInput = this.#_shadow.querySelector('input[name="token"]');
+                        tokenInput && (tokenInput.value = this.getTokenValue());
+                        break;
+                }
+            }
+
+            getReturnUrl() {
+                const returnAttr = this.getAttribute('return');
+                if (!returnAttr) {
+                    return window.location.origin + window.location.pathname;
+                }
+                if (returnAttr.startsWith('http://') || returnAttr.startsWith('https://')) {
+                    return returnAttr;
+                }
+                if (returnAttr.startsWith('/')) {
+                    return window.location.origin + returnAttr
+                }
+                return window.location.origin + window.location.pathname + returnAttr;
+            }
+
+            getTokenValue() {
+                return this.getAttribute('token') || '';
+            }
+
+            render() {
+                this.#_shadow.innerHTML = `
+              <style>${this.constructor.#styles}</style>
+              <form action="https://dn42.g-load.eu/auth/">
+                <input type="hidden" name="return" value="${this.getReturnUrl()}">
+                <input type="hidden" name="token" value="${this.getTokenValue()}">
+                <button type="submit" class="kioubit-btn-dark">
+                  <img width="25" height="25" src="data:image/svg+xml;base64,${this.constructor.#svgBase64}" alt="Kioubit.dn42 logo" class="kioubit-btn-logo">
+                  使用 Kioubit 驗證 ASN
+                </button>
+              </form>
+            `;
+            }
+        }
+        customElements.define('kioubit-auth-btn', KioubitAuthButton);
+    </script>
 </head>
 <body>
     <div class="container">
-        <h1>DN42 Peer 部署控制面板</h1>
+        <h1>DN42 Peer 自動部署</h1>
+
+        <div id="authBox" class="auth-box">
+            <p>請先驗證您的 ASN 所有權</p>
+            <div id="kioubitContainer"></div>
+        </div>
+
+        <div id="verifiedBox" class="auth-box hidden" style="background: #e3fcec; border-color: #c3e6cb;">
+            <span class="verified-badge">✅ 已驗證</span>
+            <p style="margin: 10px 0 0 0;">ASN: <strong id="displayASN"></strong></p>
+        </div>
 
         <form id="deployForm">
+            <input type="hidden" id="authData">
+            <input type="hidden" id="authSig">
+
             <label>選擇節點</label>
             <select id="nodeId" required>
                 {{range .}}
@@ -29,57 +120,124 @@
             </select>
 
             <label>ASN</label>
-            <input id="asn" required>
+            <input id="asn" required readonly placeholder="請先進行驗證" style="background-color: #e9ecef; cursor: not-allowed;">
 
             <label>IPv6 ULA ONLY!!!</label>
-            <input id="ipv6" required>
+            <input id="ipv6" required placeholder="fdxx:...">
 
             <label>WireGuard Endpoint</label>
-            <input id="endpoint" required>
+            <input id="endpoint" required placeholder="IP:Port">
 
             <label>WireGuard Public Key</label>
             <input id="pubkey" required>
 
-            <label>名稱</label>
+            <label>名稱 (Hostname)</label>
             <input id="name" required>
 
-            <button type="submit">配置 Peer</button>
+            <button type="submit" id="submitBtn" class="deploy-btn" disabled>請先完成 ASN 驗證</button>
         </form>
 
         <div id="status"></div>
     </div>
 
     <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            // 檢查 URL 是否帶有驗證回調參數
+            const params = new URLSearchParams(window.location.search);
+            const data = params.get("data");
+            const sig = params.get("sig"); // Kioubit 傳回的簽名
+
+            const kioubitContainer = document.getElementById("kioubitContainer");
+
+            if (data && sig) {
+                // === 已驗證模式 ===
+                try {
+                    // 簡單解碼以顯示 UI (真正的驗證在後端)
+                    // 處理可能的 URL Safe Base64
+                    let cleanData = data.replace(/-/g, '+').replace(/_/g, '/');
+                    const decodedJson = atob(cleanData);
+                    const authInfo = JSON.parse(decodedJson);
+
+                    // 填入數據
+                    document.getElementById("authData").value = data;
+                    document.getElementById("authSig").value = sig;
+                    document.getElementById("asn").value = authInfo.asn;
+                    document.getElementById("displayASN").textContent = authInfo.asn;
+
+                    // 切換 UI
+                    document.getElementById("authBox").classList.add("hidden");
+                    document.getElementById("verifiedBox").classList.remove("hidden");
+                    
+                    // 啟用按鈕
+                    const btn = document.getElementById("submitBtn");
+                    btn.disabled = false;
+                    btn.textContent = "配置 Peer";
+
+                    // 清理 URL 參數
+                    window.history.replaceState({}, document.title, window.location.pathname);
+
+                } catch (e) {
+                    console.error(e);
+                    alert("驗證數據解析失敗，請重新驗證");
+                    renderButton();
+                }
+            } else {
+                // === 未驗證模式 ===
+                renderButton();
+            }
+        });
+
+        function renderButton() {
+            const kioubitContainer = document.getElementById("kioubitContainer");
+            // 動態生成按鈕，確保 return URL 正確指向當前頁面
+            const returnUrl = window.location.origin + window.location.pathname;
+            kioubitContainer.innerHTML = `<kioubit-auth-btn return="${returnUrl}"></kioubit-auth-btn>`;
+        }
+
+        // 表單提交邏輯
         document.getElementById("deployForm").addEventListener("submit", async (e) => {
             e.preventDefault();
 
             const status = document.getElementById("status");
+            status.style.display = "block";
             status.textContent = "正在提交...";
             status.className = "";
 
             const payload = {
-                nodeId: nodeId.value,
-                asn: asn.value,
-                ipv6: ipv6.value,
-                endpoint: endpoint.value,
-                pubkey: pubkey.value,
-                name: name.value,
+                nodeId: document.getElementById("nodeId").value,
+                asn: document.getElementById("asn").value,
+                ipv6: document.getElementById("ipv6").value,
+                endpoint: document.getElementById("endpoint").value,
+                pubkey: document.getElementById("pubkey").value,
+                name: document.getElementById("name").value,
+                authData: document.getElementById("authData").value,
+                authSig: document.getElementById("authSig").value,
             };
 
-            const resp = await fetch("/deploy", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload)
-            });
+            try {
+                const resp = await fetch("/deploy", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
 
-            const data = await resp.json();
+                let data;
+                try {
+                    data = await resp.json();
+                } catch (e) {
+                    data = { message: await resp.text() };
+                }
 
-            if (resp.ok) {
-                status.className = "success";
-                status.textContent = "創建成功：" + data.message;
-            } else {
+                if (resp.ok) {
+                    status.className = "success";
+                    status.textContent = "創建成功：" + (data.message || "Peer 配置完成");
+                } else {
+                    status.className = "error";
+                    status.textContent = "錯誤：" + (data.message || "未知錯誤");
+                }
+            } catch (err) {
                 status.className = "error";
-                status.textContent = "錯誤：" + (data.message ?? "未知錯誤");
+                status.textContent = "請求失敗：" + err.message;
             }
         });
     </script>
